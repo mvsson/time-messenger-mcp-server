@@ -1,0 +1,57 @@
+{
+  "name": "time-messenger-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for Time Messenger (Mattermost-based corporate messenger by T-Bank)",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "time-messenger-mcp-server": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "time-messenger",
+    "mattermost",
+    "chat",
+    "messenger",
+    "t-bank",
+    "corporate-messenger"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BarredEwe/time-messenger-mcp-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/BarredEwe/time-messenger-mcp-server/issues"
+  },
+  "homepage": "https://github.com/BarredEwe/time-messenger-mcp-server#readme",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "dotenv": "^16.4.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.2",
+    "tsup": "^8.1.0",
+    "tsx": "^4.15.1",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
