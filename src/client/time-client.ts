@@ -22,6 +22,14 @@ export class TimeClient {
     this.token = token;
   }
 
+  get baseUrlValue(): string {
+    return this.baseUrl;
+  }
+
+  get tokenValue(): string {
+    return this.token;
+  }
+
   static async login(baseUrl: string, loginId: string, password: string, mfaToken?: string): Promise<TimeClient> {
     const url = `${baseUrl.replace(/\/$/, '')}/api/v4/users/login`;
     const body: Record<string, string> = { login_id: loginId, password };

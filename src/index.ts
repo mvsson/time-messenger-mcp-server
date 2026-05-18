@@ -9,6 +9,7 @@ import {
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
 import { TimeClient } from './client/time-client.js';
+import { loadSavedAuth, saveAuth } from './client/auth-store.js';
 import { messageTools } from './tools/messages.js';
 import { threadTools } from './tools/threads.js';
 import { channelTools } from './tools/channels.js';
@@ -84,13 +85,45 @@ class TimeMcpServer {
   }
 
   private async initClient(): Promise<void> {
+    // 1. Try TIME_TOKEN env var first
     if (this.timeToken) {
       this.client = new TimeClient(this.timeUrl, this.timeToken);
-    } else if (this.timeLoginId && this.timePassword) {
+      try {
+        const me = await this.client.getMe();
+        this.userId = me.id;
+        console.error('Authenticated with TIME_TOKEN');
+        return;
+      } catch {
+        console.error('TIME_TOKEN is invalid, falling back to saved/session auth');
+        this.client = null;
+      }
+    }
+
+    // 2. Try saved auth token
+    const saved = loadSavedAuth(this.timeUrl);
+    if (saved) {
+      this.client = new TimeClient(this.timeUrl, saved.token);
+      try {
+        const me = await this.client.getMe();
+        this.userId = me.id;
+        console.error('Authenticated with saved token');
+        return;
+      } catch {
+        console.error('Saved token expired, re-authenticating...');
+        this.client = null;
+      }
+    }
+
+    // 3. Login with credentials
+    if (this.timeLoginId && this.timePassword) {
       console.error('Logging in with credentials...');
       try {
         this.client = await TimeClient.login(this.timeUrl, this.timeLoginId, this.timePassword);
-        console.error('Login successful');
+        const me = await this.client.getMe();
+        this.userId = me.id;
+        saveAuth(this.timeUrl, this.client.tokenValue, this.userId);
+        console.error('Login successful, token saved');
+        return;
       } catch (error: unknown) {
         const err = error as Error & { mfaRequired?: boolean };
         if (err.mfaRequired) {
@@ -100,6 +133,19 @@ class TimeMcpServer {
           throw error;
         }
       }
+    }
+  }
+
+  private async onClientAuthenticated(client: TimeClient): Promise<void> {
+    this.client = client;
+    this.mfaRequired = false;
+    try {
+      const me = await client.getMe();
+      this.userId = me.id;
+      saveAuth(client.baseUrlValue, client.tokenValue, this.userId);
+      console.error('Auth token saved for future sessions');
+    } catch {
+      // ignore
     }
   }
 
@@ -138,14 +184,7 @@ class TimeMcpServer {
           )) as MfaLoginResult;
 
           if (result.client) {
-            this.client = result.client;
-            this.mfaRequired = false;
-            try {
-              const me = await this.client.getMe();
-              this.userId = me.id;
-            } catch {
-              // ignore
-            }
+            await this.onClientAuthenticated(result.client);
           }
 
           return { content: result.content };
