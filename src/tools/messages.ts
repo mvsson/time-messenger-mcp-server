@@ -165,10 +165,15 @@ export const messageTools = [
   },
 ];
 
-function formatPostList(postList: PostList): string {
+export function formatPostList(postList: PostList): string {
+  const seen = new Set<string>();
   const posts = postList.order
     .map((id) => postList.posts[id])
-    .filter(Boolean)
+    .filter((post): post is Post => {
+      if (!post || seen.has(post.id)) return false;
+      seen.add(post.id);
+      return true;
+    })
     .reverse();
 
   if (posts.length === 0) {
@@ -184,7 +189,7 @@ function formatPostList(postList: PostList): string {
   return lines.join('\n\n');
 }
 
-function formatSearchResult(result: { order: string[]; posts: Record<string, Post> }): string {
+export function formatSearchResult(result: { order: string[]; posts: Record<string, Post> }): string {
   const posts = result.order
     .map((id) => result.posts[id])
     .filter(Boolean);

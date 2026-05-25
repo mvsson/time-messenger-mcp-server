@@ -222,7 +222,7 @@ export const threadTools = [
   },
 ];
 
-function formatThreads(threads: Thread[]): string {
+export function formatThreads(threads: Thread[]): string {
   if (threads.length === 0) {
     return 'No threads found.';
   }
@@ -237,7 +237,7 @@ function formatThreads(threads: Thread[]): string {
   return `Found ${threads.length} thread(s):\n\n${lines.join('\n\n')}`;
 }
 
-function formatThread(thread: Thread): string {
+export function formatThread(thread: Thread): string {
   const lastReply = new Date(thread.last_reply_at).toLocaleString();
   const created = new Date(thread.create_at).toLocaleString();
   

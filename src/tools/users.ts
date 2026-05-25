@@ -89,7 +89,7 @@ export const userTools = [
   },
 ];
 
-function formatUser(user: User): string {
+export function formatUser(user: User): string {
   let text = `User: ${user.username}\n`;
   text += `ID: ${user.id}\n`;
   
@@ -111,7 +111,7 @@ function formatUser(user: User): string {
   return text;
 }
 
-function formatUsers(users: User[]): string {
+export function formatUsers(users: User[]): string {
   if (users.length === 0) {
     return 'No users found.';
   }
