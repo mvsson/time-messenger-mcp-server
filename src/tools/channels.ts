@@ -137,7 +137,7 @@ export const channelTools = [
   },
 ];
 
-function formatChannels(channels: Channel[]): string {
+export function formatChannels(channels: Channel[]): string {
   if (channels.length === 0) {
     return 'No channels found.';
   }
@@ -151,7 +151,7 @@ function formatChannels(channels: Channel[]): string {
   return `Found ${channels.length} channel(s):\n\n${lines.join('\n\n')}`;
 }
 
-function formatChannel(channel: Channel): string {
+export function formatChannel(channel: Channel): string {
   const type = channel.type === 'O' ? 'Public' : channel.type === 'P' ? 'Private' : channel.type === 'D' ? 'Direct' : 'Group';
   
   let text = `Channel: ${channel.display_name}\n`;

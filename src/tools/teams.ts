@@ -110,7 +110,7 @@ export const teamTools = [
   },
 ];
 
-function formatTeams(teams: Team[]): string {
+export function formatTeams(teams: Team[]): string {
   if (teams.length === 0) {
     return 'No teams found.';
   }
@@ -123,7 +123,7 @@ function formatTeams(teams: Team[]): string {
   return `Found ${teams.length} team(s):\n\n${lines.join('\n\n')}`;
 }
 
-function formatTeam(team: Team): string {
+export function formatTeam(team: Team): string {
   const type = team.type === 'O' ? 'Open' : 'Private';
   
   let text = `Team: ${team.display_name}\n`;
@@ -140,7 +140,7 @@ function formatTeam(team: Team): string {
   return text;
 }
 
-function formatTeamsUnread(unread: Array<{ team_id: string; msg_count: number; mention_count: number }>): string {
+export function formatTeamsUnread(unread: Array<{ team_id: string; msg_count: number; mention_count: number }>): string {
   if (unread.length === 0) {
     return 'No unread messages.';
   }
