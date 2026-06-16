@@ -13,6 +13,36 @@ import type {
 } from '../types/time-api.js';
 import { TimeApiError } from '../types/time-api.js';
 
+// Encode every caller-supplied id before it is interpolated into a URL path,
+// so a value containing `/`, `?`, `#` or `..` cannot redirect the request to a
+// different API endpoint. Simple ids are unaffected (encode is identity).
+const enc = encodeURIComponent;
+
+const DEFAULT_TIMEOUT_MS = 30_000;
+
+function requestTimeoutMs(): number {
+  const parsed = Number.parseInt(process.env.TIME_REQUEST_TIMEOUT_MS ?? '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_TIMEOUT_MS;
+}
+
+// All network egress goes through here so every request is bounded by a timeout
+// and a hung upstream can never wedge the MCP call indefinitely.
+async function fetchWithTimeout(url: string, options: RequestInit): Promise<Response> {
+  const timeoutMs = requestTimeoutMs();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new TimeApiError(`Time API request timed out after ${timeoutMs}ms`, 504);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export class TimeClient {
   private baseUrl: string;
   private token: string;
@@ -37,7 +67,7 @@ export class TimeClient {
       body.token = mfaToken;
     }
 
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -75,7 +105,7 @@ export class TimeClient {
       'Content-Type': 'application/json',
     };
 
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
@@ -110,7 +140,7 @@ export class TimeClient {
   }
 
   async getUser(userId: string): Promise<User> {
-    return this.request<User>('GET', `/users/${userId}`);
+    return this.request<User>('GET', `/users/${enc(userId)}`);
   }
 
   async searchUsers(term: string): Promise<User[]> {
@@ -120,21 +150,21 @@ export class TimeClient {
   // ========== Teams ==========
 
   async getTeamsForUser(userId: string): Promise<Team[]> {
-    return this.request<Team[]>('GET', `/users/${userId}/teams`);
+    return this.request<Team[]>('GET', `/users/${enc(userId)}/teams`);
   }
 
   async getTeam(teamId: string): Promise<Team> {
-    return this.request<Team>('GET', `/teams/${teamId}`);
+    return this.request<Team>('GET', `/teams/${enc(teamId)}`);
   }
 
   async getTeamsUnread(userId: string): Promise<TeamUnread[]> {
-    return this.request<TeamUnread[]>('GET', `/users/${userId}/teams/unread`);
+    return this.request<TeamUnread[]>('GET', `/users/${enc(userId)}/teams/unread`);
   }
 
   async getTeamUnread(userId: string, teamId: string): Promise<TeamUnread> {
     return this.request<TeamUnread>(
       'GET',
-      `/users/${userId}/teams/${teamId}/unread`
+      `/users/${enc(userId)}/teams/${enc(teamId)}/unread`
     );
   }
 
@@ -143,18 +173,18 @@ export class TimeClient {
   async getChannelsForUser(userId: string, teamId: string): Promise<Channel[]> {
     return this.request<Channel[]>(
       'GET',
-      `/users/${userId}/teams/${teamId}/channels`
+      `/users/${enc(userId)}/teams/${enc(teamId)}/channels`
     );
   }
 
   async getChannel(channelId: string): Promise<Channel> {
-    return this.request<Channel>('GET', `/channels/${channelId}`);
+    return this.request<Channel>('GET', `/channels/${enc(channelId)}`);
   }
 
   async searchChannels(teamId: string, term: string): Promise<Channel[]> {
     return this.request<Channel[]>(
       'POST',
-      `/teams/${teamId}/channels/search`,
+      `/teams/${enc(teamId)}/channels/search`,
       { term }
     );
   }
@@ -165,7 +195,7 @@ export class TimeClient {
   ): Promise<ChannelUnread> {
     return this.request<ChannelUnread>(
       'GET',
-      `/users/${userId}/channels/${channelId}/unread`
+      `/users/${enc(userId)}/channels/${enc(channelId)}/unread`
     );
   }
 
@@ -190,22 +220,22 @@ export class TimeClient {
   ): Promise<PostList> {
     return this.request<PostList>(
       'GET',
-      `/channels/${channelId}/posts?page=${page}&per_page=${perPage}`
+      `/channels/${enc(channelId)}/posts?page=${page}&per_page=${perPage}`
     );
   }
 
   async getPost(postId: string): Promise<Post> {
-    return this.request<Post>('GET', `/posts/${postId}`);
+    return this.request<Post>('GET', `/posts/${enc(postId)}`);
   }
 
   async getPostThread(postId: string): Promise<PostList> {
-    return this.request<PostList>('GET', `/posts/${postId}/thread`);
+    return this.request<PostList>('GET', `/posts/${enc(postId)}/thread`);
   }
 
   async searchPosts(teamId: string, terms: string): Promise<SearchResult> {
     return this.request<SearchResult>(
       'POST',
-      `/teams/${teamId}/posts/search`,
+      `/teams/${enc(teamId)}/posts/search`,
       { terms }
     );
   }
@@ -215,7 +245,7 @@ export class TimeClient {
   async getUserThreads(userId: string, teamId: string): Promise<Thread[]> {
     return this.request<Thread[]>(
       'GET',
-      `/users/${userId}/teams/${teamId}/threads`
+      `/users/${enc(userId)}/teams/${enc(teamId)}/threads`
     );
   }
 
@@ -225,7 +255,7 @@ export class TimeClient {
   ): Promise<ThreadStats> {
     return this.request<ThreadStats>(
       'GET',
-      `/users/${userId}/teams/${teamId}/threads/stats`
+      `/users/${enc(userId)}/teams/${enc(teamId)}/threads/stats`
     );
   }
 
@@ -236,21 +266,21 @@ export class TimeClient {
   ): Promise<Thread> {
     return this.request<Thread>(
       'GET',
-      `/users/${userId}/teams/${teamId}/threads/${threadId}`
+      `/users/${enc(userId)}/teams/${enc(teamId)}/threads/${enc(threadId)}`
     );
   }
 
   async startFollowingThread(userId: string, threadId: string): Promise<void> {
     return this.request<void>(
       'POST',
-      `/users/${userId}/threads/${threadId}/following`
+      `/users/${enc(userId)}/threads/${enc(threadId)}/following`
     );
   }
 
   async stopFollowingThread(userId: string, threadId: string): Promise<void> {
     return this.request<void>(
       'DELETE',
-      `/users/${userId}/threads/${threadId}/following`
+      `/users/${enc(userId)}/threads/${enc(threadId)}/following`
     );
   }
 
@@ -262,7 +292,7 @@ export class TimeClient {
   ): Promise<void> {
     return this.request<void>(
       'PUT',
-      `/users/${userId}/teams/${teamId}/threads/${threadId}/read/${timestamp}`
+      `/users/${enc(userId)}/teams/${enc(teamId)}/threads/${enc(threadId)}/read/${timestamp}`
     );
   }
 }

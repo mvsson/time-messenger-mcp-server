@@ -150,6 +150,15 @@ describe('TimeClient', () => {
       );
     });
 
+    it('getUser percent-encodes ids so they cannot traverse the path', async () => {
+      fetchSpy.mockReturnValue(mockFetchResponse({ id: 'x' }));
+      await client.getUser('../admin/secret');
+      expect(fetchSpy).toHaveBeenCalledWith(
+        'https://time.test.com/api/v4/users/..%2Fadmin%2Fsecret',
+        expect.anything()
+      );
+    });
+
     it('searchUsers calls POST /users/search', async () => {
       fetchSpy.mockReturnValue(mockFetchResponse([]));
       await client.searchUsers('john');

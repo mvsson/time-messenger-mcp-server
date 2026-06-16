@@ -18,8 +18,26 @@ import { userTools } from './tools/users.js';
 import { authTools } from './tools/auth.js';
 import type { MfaLoginResult } from './tools/auth.js';
 
+// State-changing tools. Disabled by default so that, in the common case, a
+// prompt-injection in channel content the model reads cannot post/act as the
+// user. Enable explicitly with TIME_ALLOW_WRITE=true (1/yes/on) when you need
+// to send messages or manage threads.
+const WRITE_TOOLS = new Set([
+  'send_message',
+  'follow_thread',
+  'unfollow_thread',
+  'mark_thread_read',
+]);
+
+const ALLOW_WRITE = /^(1|true|yes|on)$/i.test((process.env.TIME_ALLOW_WRITE ?? '').trim());
+
+// Cap how much upstream/error text is reflected back into the model, so an
+// attacker-influenced API error body cannot smuggle a large instruction payload.
+const MAX_ERROR_MESSAGE = 500;
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const allTools: any[] = [...authTools, ...messageTools, ...threadTools, ...channelTools, ...teamTools, ...userTools];
+const allTools: any[] = [...authTools, ...messageTools, ...threadTools, ...channelTools, ...teamTools, ...userTools]
+  .filter((tool) => ALLOW_WRITE || !WRITE_TOOLS.has(tool.name));
 
 class TimeMcpServer {
   private server: Server;
@@ -163,6 +181,14 @@ class TimeMcpServer {
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
 
+      if (WRITE_TOOLS.has(name) && !ALLOW_WRITE) {
+        throw new McpError(
+          ErrorCode.InvalidRequest,
+          `Tool "${name}" is a write/state-changing action and is disabled. ` +
+            `Set TIME_ALLOW_WRITE=true to enable write tools.`
+        );
+      }
+
       const tool = allTools.find((t) => t.name === name);
 
       if (!tool) {
@@ -201,7 +227,10 @@ class TimeMcpServer {
         return result;
       } catch (error) {
         if (error instanceof Error) {
-          throw new McpError(ErrorCode.InternalError, error.message);
+          const msg = error.message.length > MAX_ERROR_MESSAGE
+            ? `${error.message.slice(0, MAX_ERROR_MESSAGE)}… [truncated]`
+            : error.message;
+          throw new McpError(ErrorCode.InternalError, msg);
         }
         throw error;
       }
