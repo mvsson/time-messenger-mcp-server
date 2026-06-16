@@ -25,6 +25,16 @@ function requestTimeoutMs(): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_TIMEOUT_MS;
 }
 
+// Some Time Messenger deployments sit behind a WAF that silently drops requests
+// whose User-Agent is a non-browser default (curl/node), so we send a
+// browser-like UA. Override with TIME_USER_AGENT if needed.
+const DEFAULT_USER_AGENT =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+
+function userAgent(): string {
+  return process.env.TIME_USER_AGENT || DEFAULT_USER_AGENT;
+}
+
 // All network egress goes through here so every request is bounded by a timeout
 // and a hung upstream can never wedge the MCP call indefinitely.
 async function fetchWithTimeout(url: string, options: RequestInit): Promise<Response> {
@@ -69,7 +79,7 @@ export class TimeClient {
 
     const response = await fetchWithTimeout(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'User-Agent': userAgent() },
       body: JSON.stringify(body),
     });
 
@@ -84,7 +94,11 @@ export class TimeClient {
     const errorBody = await response.json().catch(() => ({})) as Record<string, string>;
     const reason = errorBody.id || '';
 
-    if (reason === 'mfa.totp_required' || reason === 'mfa.challenge') {
+    // When no MFA token was supplied and the server rejects with any mfa.* error,
+    // it means MFA is required — signal the caller to prompt for a code.
+    // (Different Time/Mattermost builds use mfa.totp_required, mfa.challenge, or
+    // mfa.validate_token.authenticate.app_error for a missing token.)
+    if (!mfaToken && reason.startsWith('mfa.')) {
       const err = new Error('MFA_REQUIRED') as Error & { mfaRequired: true };
       err.mfaRequired = true;
       throw err;
@@ -103,6 +117,7 @@ export class TimeClient {
     const headers: Record<string, string> = {
       'Authorization': `Bearer ${this.token}`,
       'Content-Type': 'application/json',
+      'User-Agent': userAgent(),
     };
 
     const response = await fetchWithTimeout(url, {
